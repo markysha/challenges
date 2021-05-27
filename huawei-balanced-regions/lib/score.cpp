@@ -9,12 +9,17 @@ int main(int argc, char* argv[]) {
     ifstream input(inputfile);
     ifstream output(outputfile);
 
-    Input in;
-    input >> in;
-    Output out;
-    output >> out;
-    long double score = utils::score(in, out);
-
-    cout << fixed << setprecision(8);
-    cout << "SCORE = " << score << endl;
+    int t;
+    input >> t;
+    int score_sum = 0;
+    while (t--) {
+        Input in;
+        input >> in;
+        Output out;
+        output >> out;
+        int score = utils::score(in, out);
+        cout << "Test case score " << score << endl;
+        score_sum += score;
+    }
+    cout << "SCORE = " << score_sum << endl;
 }

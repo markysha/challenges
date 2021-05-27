@@ -144,12 +144,12 @@ do
         # fi
 
         ### BUBBLE_CUP CHALLENGE2 COSTYL ###
-        cp $CHALLENGE_PATH/useful/judge/judge.out $OUTPUT/score.out
+        # cp $CHALLENGE_PATH/useful/judge/judge.out $OUTPUT/score.out
 
-        $OUTPUT/score.out $input $OUTPUT/ans_$i $OUTPUT/score.txt $OUTPUT/pinfo.txt
+        $OUTPUT/score.out $input $OUTPUT/ans_$i
 
-        echo -n "SCORE = "
-        cat $OUTPUT/score.txt
+        # echo -n "SCORE = "
+        # cat $OUTPUT/score.txt
         ####################################
     else
         echo "Finished!"
