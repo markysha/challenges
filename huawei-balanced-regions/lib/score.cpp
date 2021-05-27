@@ -15,9 +15,10 @@ int main(int argc, char* argv[]) {
     while (t--) {
         Input in;
         input >> in;
+        utils::Checker checker(in);
         Output out;
         output >> out;
-        int score = utils::score(in, out);
+        int score = checker.score(out);
         cout << "Test case score " << score << endl;
         score_sum += score;
     }

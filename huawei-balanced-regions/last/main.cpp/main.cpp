@@ -31,6 +31,16 @@ struct Input {
     }
 
     friend ostream& operator<<(ostream& stream, const Input& in) {
+        stream << in.n;
+        for (int x : in.w) stream << ' ' << x;
+        stream << endl;
+        stream << in.k;
+        for (int x : in.u) stream << ' ' << x + 1;
+        stream << endl;
+        stream << in.m << endl;
+        for (int i = 0; i < in.m; i++) {
+            stream << in.edges[i].u + 1 << ' ' << in.edges[i].v + 1 << endl;
+        }
         return stream;
     }
 
@@ -124,6 +134,179 @@ struct Output {
 };
 
 namespace utils {
+const int N = 5000;
+
+struct Checker {
+    Input in;
+    vector<bitset<N>> reachability_table;
+
+    Checker() {}
+    Checker(const Input& in) : in(in) {
+        used.resize(in.n);
+        build_reachability_table();
+    }
+    bool is_correct_region(const vector<int>& marked, const vector<int>& region) {
+        bitset<N> region_bitset;
+        for (auto v : region) region_bitset[v] = 1;
+        for (auto v : region) {
+            if (marked[v]) {
+                if ((reachability_table[v] & region_bitset).count()) {
+                    // cerr << "[Error] There is path that contains not all marked verticies from some region";
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    bool is_correct(const Output& out) {
+        bitset<N> marked;
+        for (int v : in.u) marked[v] = 1;
+
+        for (int v : out.v) {
+            if (marked[v]) {
+                cerr << "[Error] Already marked vertex " << v + 1 << endl;
+                return false;
+            }
+            marked[v] = 1;
+        }
+
+        {
+            set<int> all;
+            bitset<N> region_bitset;
+            for (const auto& region : out.regions) {
+                bool has_marked = false;
+                for (auto v : region) region_bitset[v] = 1;
+                for (auto v : region) {
+                    if (all.count(v)) {
+                        cerr << "[Error] Vertex " << v + 1 << " is more than in one region" << endl;
+                        return false;
+                    }
+                    if (marked[v]) {
+                        has_marked = true;
+                    }
+                    all.insert(v);
+                }
+                for (auto v : region) {
+                    if (marked[v]) {
+                        if ((reachability_table[v] & region_bitset).count()) {
+                            cerr << "[Error] There is path that contains not all marked verticies from some region";
+                            return false;
+                        }
+                    }
+                }
+                if (!has_marked) {
+                    cerr << "[Error] Some region does not contain marked vertex" << endl;
+                    return false;
+                }
+                for (auto v : region) region_bitset[v] = 0;
+            }
+            for (int i = 0; i < in.n; i++) {
+                if (all.count(i) == 0) {
+                    cerr << "[Error] Vertex " << i + 1 << " does not belong to any region" << endl;
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+    int score(const Output& out) {
+        if (!is_correct(out)) {
+            return 0;
+        }
+
+        double min_beta = 1.0;
+        for (const auto& region : out.regions) {
+            pair<int, int> cur = get_region_beta_pair(region);
+            // cerr << cur.first << ' ' << cur.second << endl;
+            if (1ll * cur.first * 10 < 9 * cur.second) {
+                cerr << "[Error] There is region with beta < 0.9" << endl;
+                return 0;
+            }
+            min_beta = min(min_beta, 1.0 * cur.first / cur.second);
+        }
+        cerr << "[Info] Min beta = " << fixed << setprecision(8) << min_beta << endl;
+
+        return out.regions.size();
+    }
+
+    pair<int, int> get_region_beta_pair(const vector<int>& region) {
+        vector<int> cur_w(in.n, 0);
+        for (int v : region) cur_w[v] = in.w[v];
+        auto topsort = in.get_topsort(false);
+        vector<pair<int, int>> dp(in.n);
+        for (int v : topsort) {
+            dp[v] = {1e9, 0};
+            for (int to : in.g[v]) {
+                if (dp[to].first != 0) dp[v].first = min(dp[v].first, dp[to].first);
+                dp[v].second = max(dp[v].second, dp[to].second);
+            }
+            if (dp[v].first > dp[v].second) dp[v] = {0, 0};
+            dp[v].first += cur_w[v];
+            dp[v].second += cur_w[v];
+        }
+        return dp[0];
+    }
+
+private:
+    vector<int> used;
+    int timer = 0;
+
+    void build_reachability_table() {
+        reachability_table.clear();
+        reachability_table.resize(in.n);
+
+        vector<bitset<N>> reachability(in.n);
+        for (int blocked = 1; blocked < in.n - 1; blocked++) {
+            ++timer;
+            queue<int> q;
+            q.push(in.n - 1);
+            used[in.n - 1] = timer;
+            while (!q.empty()) {
+                int v = q.front();
+                q.pop();
+                for (int to : in.gr[v]) {
+                    if (to == blocked || used[to] == timer) continue;
+                    used[to] = timer;
+                    q.push(to);
+                }
+            }
+            for (int i = 1; i < in.n - 1; i++) {
+                if (i == blocked) continue;
+                if (used[i] == timer) {
+                    reachability[blocked][i] = 1;
+                }
+            }
+        }
+        for (int blocked = 1; blocked < in.n - 1; blocked++) {
+            ++timer;
+            queue<int> q;
+            q.push(0);
+            used[0] = timer;
+            while (!q.empty()) {
+                int v = q.front();
+                q.pop();
+                for (int to : in.g[v]) {
+                    if (to == blocked || used[to] == timer) continue;
+                    used[to] = timer;
+                    q.push(to);
+                }
+            }
+            for (int i = 1; i < in.n - 1; i++) {
+                if (used[i] == timer) {
+                    if (reachability[blocked][i]) {
+                        reachability_table[blocked][i] = 1;
+                    }
+                }
+            }
+        }
+        // for (int i = 0; i < in.n; i++) {
+        //     for (int j = 0; j < in.n; j++) {
+        //         cout << reachability[i][j];
+        //     }
+        //     cout << endl;
+        // }
+    }
+};
 
 vector<pair<int, int>> get_minmax_path_length(const Input& in, bool reversed = false) {
     vector<pair<int, int>> ans(in.n);
@@ -159,78 +342,26 @@ vector<pair<int, int>> get_minmax_path_length(const Input& in, bool reversed = f
     return ans;
 }
 
-pair<int, int> get_region_beta_pair(const Input& in, const vector<int>& region) {
-    vector<int> cur_w(in.n, 0);
-    for (int v : region) cur_w[v] = in.w[v];
-    auto topsort = in.get_topsort(false);
-    vector<pair<int, int>> dp(in.n);
-    for (int v : topsort) {
-        dp[v] = {1e9, 0};
-        for (int to : in.g[v]) {
-            if (dp[to].first != 0) dp[v].first = min(dp[v].first, dp[to].first);
-            dp[v].second = max(dp[v].second, dp[to].second);
-        }
-        if (dp[v].first > dp[v].second) dp[v] = {0, 0};
-        dp[v].first += cur_w[v];
-        dp[v].second += cur_w[v];
+Input input_generator() {
+    Input in;
+    in.n = 500;
+    for (int i = 0; i < in.n; i++) in.w.push_back(rand() % 50);
+    in.k = 0;
+    for (int i = rand() % in.n; i < in.n; i += rand() % 50 + 1) {
+        in.k++;
+        in.u.push_back(i);
     }
-    return dp[0];
+    for (int i = in.n - 2; i >= 0; i--) {
+        vector<int> all(in.n - i - 1);
+        iota(all.begin(), all.end(), i + 1);
+        random_shuffle(all.begin(), all.end());
+        for (int j = 0; j < min<int>(all.size(), 50); j++) {
+            in.edges.push_back({i, all[j]});
+        }
+    }
+    in.m = in.edges.size();
+    return in;
 }
-
-int score(const Input& in, const Output& out) {
-    vector<bool> marked(in.n, false);
-    for (int v : in.u) marked[v] = true;
-
-    for (int v : out.v) {
-        if (marked[v]) {
-            cerr << "[Error] Already marked vertex " << v + 1 << endl;
-            return 0;
-        }
-        marked[v] = true;
-    }
-
-    {
-        set<int> all;
-        for (const auto& region : out.regions) {
-            bool has_marked = false;
-            for (auto v : region) {
-                if (all.count(v)) {
-                    cerr << "[Error] Vertex " << v + 1 << " is more than in one region" << endl;
-                    return 0;
-                }
-                if (marked[v]) {
-                    has_marked = true;
-                }
-                all.insert(v);
-            }
-            if (!has_marked) {
-                cerr << "[Error] Some region does not contain marked region" << endl;
-                return 0;
-            }
-        }
-        for (int i = 0; i < in.n; i++) {
-            if (all.count(i) == 0) {
-                cerr << "[Error] Vertex " << i + 1 << " does not belong to any region" << endl;
-                return 0;
-            }
-        }
-    }
-
-    double min_beta = 1.0;
-    for (const auto& region : out.regions) {
-        pair<int, int> cur = get_region_beta_pair(in, region);
-        // cerr << cur.first << ' ' << cur.second << endl;
-        if (1ll * cur.first * 10 < 9 * cur.second) {
-            cerr << "[Error] There is region with beta < 0.9" << endl;
-            return 0;
-        }
-        min_beta = min(min_beta, 1.0 * cur.first / cur.second);
-    }
-    cerr << "[Info] Min beta = " << fixed << setprecision(8) << min_beta << endl;
-
-    return out.regions.size();
-}
-
 }  // namespace utils#include <bits/stdc++.h>
 
 using namespace std;
@@ -275,6 +406,7 @@ vector<int> paired_list;
 vector<int> paired;
 int timer = 0;
 Input in;
+utils::Checker checker;
 
 void merge_dependent() {
     vector<bitset<N>> to_connect(in.n);
@@ -295,7 +427,7 @@ void merge_dependent() {
         for (int i = 1; i < in.n - 1; i++) {
             if (i == blocked) continue;
             if (used[i] != timer) {
-                to_connect[i][blocked] = 1;
+                to_connect[blocked][i] = 1;
             }
         }
     }
@@ -315,7 +447,7 @@ void merge_dependent() {
         }
         for (int i = 1; i < in.n - 1; i++) {
             if (used[i] != timer) {
-                if (to_connect[blocked][i]) {
+                if (to_connect[i][blocked]) {
                     dsu.unite(i, blocked);
                     marked[i] |= 2;
                     marked[blocked] |= 2;
@@ -335,24 +467,30 @@ void merge_dependent() {
 
 void connect_not_marked_to_paired() {
     vector<int> node_ids(in.n);
+    vector<int> cur_w = in.w;
     iota(node_ids.begin(), node_ids.end(), 0);
-    auto node_weights = in.w;
-    sort(node_ids.begin(), node_ids.end(), [&node_weights](int a, int b) {
-        return node_weights[a] > node_weights[b];
+    sort(node_ids.begin(), node_ids.end(), [&cur_w](int a, int b) {
+        return cur_w[a] > cur_w[b];
     });
     for (auto v : node_ids) {
         // if (paired[v]) continue;
         vector<int> region_v = dsu.r[dsu.get(v)];
         bool has_marked = false;
-        for (auto u : region_v) has_marked |= marked[u] == 1;
-        if (has_marked) continue;
-        if (paired[v]) continue;
+        for (auto u : region_v) has_marked |= marked[u] > 0;
+        // if (!has_marked) continue;
+        // if (paired[v]) continue;
         for (int to : in.g[v]) {
-            if (!paired[to] || dsu.get(to) == dsu.get(v)) continue;
+            if ((dsu.get(to) == dsu.get(v))) continue;
             vector<int> region = dsu.r[dsu.get(to)];
+
+            bool has_marked = false;
+            for (auto u : region) has_marked |= marked[u] > 1;
+            if (!has_marked) continue;
+
             region.insert(region.end(), region_v.begin(), region_v.end());
-            auto beta_pair = utils::get_region_beta_pair(in, region);
+            auto beta_pair = checker.get_region_beta_pair(region);
             if (1ll * beta_pair.first * 10 < beta_pair.second * 9) continue;
+            if (!checker.is_correct_region(marked, region)) continue;
             // paired[v] = 1;
             dsu.unite(v, to);
             for (auto u : region_v) marked[u] &= 1;
@@ -363,6 +501,7 @@ void connect_not_marked_to_paired() {
 
 void solve() {
     cin >> in;
+    checker = utils::Checker(in);
 
     paired_list = {0, in.n - 1};
     paired.assign(in.n, 0);
@@ -406,6 +545,15 @@ void solve() {
 int main() {
     ios_base::sync_with_stdio(0);
     cin.tie(0);
+    // {
+    //     cout << 3 << endl;
+
+    //     for (int i = 0; i < 3; i++) {
+    //         Input in = utils::input_generator();
+    //         cout << in << endl;
+    //     }
+    //     return 0;
+    // }
     int t;
     cin >> t;
     while (t--) {

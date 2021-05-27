@@ -43,6 +43,7 @@ vector<int> paired_list;
 vector<int> paired;
 int timer = 0;
 Input in;
+utils::Checker checker;
 
 void merge_dependent() {
     vector<bitset<N>> to_connect(in.n);
@@ -63,7 +64,7 @@ void merge_dependent() {
         for (int i = 1; i < in.n - 1; i++) {
             if (i == blocked) continue;
             if (used[i] != timer) {
-                to_connect[i][blocked] = 1;
+                to_connect[blocked][i] = 1;
             }
         }
     }
@@ -83,7 +84,7 @@ void merge_dependent() {
         }
         for (int i = 1; i < in.n - 1; i++) {
             if (used[i] != timer) {
-                if (to_connect[blocked][i]) {
+                if (to_connect[i][blocked]) {
                     dsu.unite(i, blocked);
                     marked[i] |= 2;
                     marked[blocked] |= 2;
@@ -103,24 +104,30 @@ void merge_dependent() {
 
 void connect_not_marked_to_paired() {
     vector<int> node_ids(in.n);
+    vector<int> cur_w = in.w;
     iota(node_ids.begin(), node_ids.end(), 0);
-    auto node_weights = in.w;
-    sort(node_ids.begin(), node_ids.end(), [&node_weights](int a, int b) {
-        return node_weights[a] > node_weights[b];
+    sort(node_ids.begin(), node_ids.end(), [&cur_w](int a, int b) {
+        return cur_w[a] < cur_w[b];
     });
     for (auto v : node_ids) {
         // if (paired[v]) continue;
         vector<int> region_v = dsu.r[dsu.get(v)];
         bool has_marked = false;
-        for (auto u : region_v) has_marked |= marked[u] == 1;
-        if (has_marked) continue;
-        if (paired[v]) continue;
+        for (auto u : region_v) has_marked |= marked[u] > 0;
+        // if (!has_marked) continue;
+        // if (paired[v]) continue;
         for (int to : in.g[v]) {
-            if (!paired[to] || dsu.get(to) == dsu.get(v)) continue;
+            if ((dsu.get(to) == dsu.get(v))) continue;
             vector<int> region = dsu.r[dsu.get(to)];
+
+            bool has_marked = false;
+            for (auto u : region) has_marked |= marked[u] > 1;
+            if (!has_marked) continue;
+
             region.insert(region.end(), region_v.begin(), region_v.end());
-            auto beta_pair = utils::get_region_beta_pair(in, region);
+            auto beta_pair = checker.get_region_beta_pair(region);
             if (1ll * beta_pair.first * 10 < beta_pair.second * 9) continue;
+            if (!checker.is_correct_region(marked, region)) continue;
             // paired[v] = 1;
             dsu.unite(v, to);
             for (auto u : region_v) marked[u] &= 1;
@@ -131,6 +138,7 @@ void connect_not_marked_to_paired() {
 
 void solve() {
     cin >> in;
+    checker = utils::Checker(in);
 
     paired_list = {0, in.n - 1};
     paired.assign(in.n, 0);
@@ -143,7 +151,7 @@ void solve() {
     marked[0] |= 2;
 
     merge_dependent();
-    // connect_not_marked_to_paired();
+    connect_not_marked_to_paired();
 
     Output out;
     //
@@ -174,6 +182,15 @@ void solve() {
 int main() {
     ios_base::sync_with_stdio(0);
     cin.tie(0);
+    // {
+    //     cout << 3 << endl;
+
+    //     for (int i = 0; i < 3; i++) {
+    //         Input in = utils::input_generator();
+    //         cout << in << endl;
+    //     }
+    //     return 0;
+    // }
     int t;
     cin >> t;
     while (t--) {
