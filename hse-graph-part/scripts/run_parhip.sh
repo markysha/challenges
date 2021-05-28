@@ -1,6 +1,7 @@
 #!/bin/bash
 ROOT_FOLDER=""
-KAHIP_MASTER_FOLDER=$ROOT_FOLDER"/algorithms/KaHIP-master"
+#KAHIP_MASTER_FOLDER=$ROOT_FOLDER"/algorithms/KaHIP-master"
+KAHIP_MASTER_FOLDER=$ROOT_FOLDER"/algorithms/KaHIP-updated"
 
 DATA_ROOT_FOLDER="../../data"
 GRAPH_DATA_ROOT_FOLDER=$DATA_ROOT_FOLDER"/benchmark_set_graph"
