@@ -7,6 +7,53 @@ using Region = vector<int>;
 
 namespace utils {};  // namespace utils
 
+struct Bitset {
+    vector<uint64_t> data;
+
+    Bitset(int n) {
+        data.resize((n + 63) / 64);
+    }
+
+    Bitset(const Bitset& a) {
+        data = a.data;
+    }
+
+    Bitset() {}
+
+    int operator[](int pos) {
+        return (data[pos / 64] >> (pos & 63)) & 1;
+    }
+
+    inline void set(int pos, int val) {
+        int cur = (data[pos / 64] >> (pos & 63)) & 1;
+        if (val != cur) {
+            data[pos / 64] ^= 1ull << (pos & 63);
+        }
+    }
+
+    int count() const {
+        int ans = 0;
+        for (auto it : data) {
+            ans += __builtin_popcountll(it);
+        }
+        return ans;
+    }
+
+    void operator&=(const Bitset& b) {
+        for (int i = 0; i < b.data.size(); i++) {
+            data[i] &= b.data[i];
+        }
+    }
+};
+
+int bitset_and_count(const Bitset& a, const Bitset& b) {
+    int ans = 0;
+    for (int i = 0; i < a.data.size(); i++) {
+        ans += __builtin_popcountll(a.data[i] & b.data[i]);
+    }
+    return ans;
+}
+
 struct Edge {
     int u;
     int v;
@@ -55,6 +102,8 @@ struct Input {
             --x;
         }
         stream >> in.m;
+        in.g.clear();
+        in.gr.clear();
         in.g.resize(in.n);
         in.gr.resize(in.n);
         in.edges.resize(in.m);
@@ -138,24 +187,56 @@ const int N = 5000;
 
 struct Checker {
     Input in;
-    vector<bitset<N>> reachability_table;
+    vector<Bitset> reachability_table;
+    vector<int> topsort;
 
     Checker() {}
     Checker(const Input& in) : in(in) {
         used.resize(in.n);
         build_reachability_table();
+        topsort = in.get_topsort(false);
     }
     bool is_correct_region(const vector<int>& marked, const vector<int>& region) {
-        bitset<N> region_bitset;
-        for (auto v : region) region_bitset[v] = 1;
-        for (auto v : region) {
-            if (marked[v]) {
-                if ((reachability_table[v] & region_bitset).count()) {
+        Bitset region_bitset(in.n);
+        for (auto v : region) region_bitset.set(v, 1);
+        int cnt = 0;
+        for (auto blocked : region) {
+            if (marked[blocked]) {
+                ++cnt;
+                // cerr << blocked << ' ' << bitset_and_count(reachability_table[blocked], region_bitset) << endl;
+                if (bitset_and_count(reachability_table[blocked], region_bitset)) {
                     // cerr << "[Error] There is path that contains not all marked verticies from some region";
                     return false;
                 }
             }
         }
+        if (cnt == 0) return false;
+        return true;
+    }
+    bool is_correct_region_union(const vector<int>& marked, const vector<int>& region1, const vector<int>& region2) {
+        Bitset region_bitset(in.n);
+        for (auto v : region1) region_bitset.set(v, 1);
+        for (auto v : region2) region_bitset.set(v, 1);
+        int cnt = 0;
+        for (auto blocked : region1) {
+            if (marked[blocked]) {
+                ++cnt;
+                if (bitset_and_count(reachability_table[blocked], region_bitset)) {
+                    // cerr << "[Error] There is path that contains not all marked verticies from some region";
+                    return false;
+                }
+            }
+        }
+        for (auto v : region2) {
+            if (marked[v]) {
+                ++cnt;
+                if (bitset_and_count(reachability_table[v], region_bitset)) {
+                    // cerr << "[Error] There is path that contains not all marked verticies from some region";
+                    return false;
+                }
+            }
+        }
+        if (cnt == 0) return false;
         return true;
     }
     bool is_correct(const Output& out) {
@@ -172,10 +253,10 @@ struct Checker {
 
         {
             set<int> all;
-            bitset<N> region_bitset;
+            Bitset region_bitset(in.n);
             for (const auto& region : out.regions) {
                 bool has_marked = false;
-                for (auto v : region) region_bitset[v] = 1;
+                for (auto v : region) region_bitset.set(v, 1);
                 for (auto v : region) {
                     if (all.count(v)) {
                         cerr << "[Error] Vertex " << v + 1 << " is more than in one region" << endl;
@@ -188,7 +269,7 @@ struct Checker {
                 }
                 for (auto v : region) {
                     if (marked[v]) {
-                        if ((reachability_table[v] & region_bitset).count()) {
+                        if (bitset_and_count(reachability_table[v], region_bitset)) {
                             cerr << "[Error] There is path that contains not all marked verticies from some region";
                             return false;
                         }
@@ -198,7 +279,7 @@ struct Checker {
                     cerr << "[Error] Some region does not contain marked vertex" << endl;
                     return false;
                 }
-                for (auto v : region) region_bitset[v] = 0;
+                for (auto v : region) region_bitset.set(v, 0);
             }
             for (int i = 0; i < in.n; i++) {
                 if (all.count(i) == 0) {
@@ -207,9 +288,17 @@ struct Checker {
                 }
             }
         }
+
+        for (const auto& region : out.regions) {
+            pair<int, int> cur = get_region_beta_pair(region);
+            // cerr << cur.first << ' ' << cur.second << endl;
+            if (1ll * cur.first * 10 < 9 * cur.second) {
+                return false;
+            }
+        }
         return true;
     }
-    int score(const Output& out) {
+    int score(const Output& out, bool verbose = true) {
         if (!is_correct(out)) {
             return 0;
         }
@@ -218,44 +307,93 @@ struct Checker {
         for (const auto& region : out.regions) {
             pair<int, int> cur = get_region_beta_pair(region);
             // cerr << cur.first << ' ' << cur.second << endl;
-            if (1ll * cur.first * 10 < 9 * cur.second) {
+            if (1ll * cur.first * 10 < 1ll * 9 * cur.second) {
                 cerr << "[Error] There is region with beta < 0.9" << endl;
+                return 0;
+            }
+            if (cur.first > cur.second) {
+                cerr << "[Error] Beta" << cur.first << ' ' << cur.second << endl;
+                for (auto v : region) cerr << v + 1 << ' ';
+                cerr << endl;
                 return 0;
             }
             min_beta = min(min_beta, 1.0 * cur.first / cur.second);
         }
-        cerr << "[Info] Min beta = " << fixed << setprecision(8) << min_beta << endl;
+        if (verbose) cerr << "[Info] Min beta = " << fixed << setprecision(8) << min_beta << endl;
 
         return out.regions.size();
+    }
+
+    void update(pair<int, int> &a, int b) {
+        if ((b == a.first) || (b == a.second)) return;
+        if (b < a.second) a.second = b;
+        if (a.second < a.first) swap(a.first, a.second);
     }
 
     pair<int, int> get_region_beta_pair(const vector<int>& region) {
         vector<int> cur_w(in.n, 0);
         for (int v : region) cur_w[v] = in.w[v];
-        auto topsort = in.get_topsort(false);
-        vector<pair<int, int>> dp(in.n);
+        vector<pair<pair<int, int>, int>> dp(in.n);
         for (int v : topsort) {
-            dp[v] = {1e9, 0};
+            dp[v] = {{1e9, 1e9}, 0};
             for (int to : in.g[v]) {
-                if (dp[to].first != 0) dp[v].first = min(dp[v].first, dp[to].first);
+                update(dp[v].first, dp[to].first.first);
+                update(dp[v].first, dp[to].first.second);
+                update(dp[v].first, dp[to].second);
                 dp[v].second = max(dp[v].second, dp[to].second);
             }
-            if (dp[v].first > dp[v].second) dp[v] = {0, 0};
-            dp[v].first += cur_w[v];
+            if (in.g[v].size() == 0) dp[v] = {{0, 0}, 0};
+            dp[v].first.first += cur_w[v];
+            dp[v].first.second += cur_w[v];
             dp[v].second += cur_w[v];
         }
-        return dp[0];
+        if (dp[0].first.first == 0) {
+            return {dp[0].first.second, dp[0].second};
+        }
+        return {dp[0].first.first, dp[0].second};
+    }
+
+    bool is_correct_region_beta(const vector<int>& region) {
+        auto cur = get_region_beta_pair(region);
+        return 1ll * cur.first * 10 >= 1ll * 9 * cur.second;
+    }
+
+    pair<int, int> get_region_union_beta_pair(const vector<int>& region1, const vector<int>& region2) {
+        vector<int> cur_w(in.n, 0);
+        for (int v : region1) cur_w[v] = in.w[v];
+        for (int v : region2) cur_w[v] = in.w[v];
+        vector<pair<pair<int, int>, int>> dp(in.n);
+        for (int v : topsort) {
+            dp[v] = {{1e9, 1e9}, 0};
+            for (int to : in.g[v]) {
+                update(dp[v].first, dp[to].first.first);
+                update(dp[v].first, dp[to].first.second);
+                update(dp[v].first, dp[to].second);
+                dp[v].second = max(dp[v].second, dp[to].second);
+            }
+            if (in.g[v].size() == 0) dp[v] = {{0, 0}, 0};
+            dp[v].first.first += cur_w[v];
+            dp[v].first.second += cur_w[v];
+            dp[v].second += cur_w[v];
+        }
+        if (dp[0].first.first == 0) {
+            return {dp[0].first.second, dp[0].second};
+        }
+        return {dp[0].first.first, dp[0].second};
     }
 
 private:
     vector<int> used;
+    vector<int> used1;
     int timer = 0;
 
     void build_reachability_table() {
         reachability_table.clear();
-        reachability_table.resize(in.n);
+        reachability_table.resize(in.n, Bitset(in.n));
 
-        vector<bitset<N>> reachability(in.n);
+        used1 = used;
+        // for (int i = 1; i < in.n - 1; i++) reachability_table[i][0] = 1;
+        // for (int i = 1; i < in.n - 1; i++) reachability_table[i][in.n - 1] = 1;
         for (int blocked = 1; blocked < in.n - 1; blocked++) {
             ++timer;
             queue<int> q;
@@ -270,94 +408,68 @@ private:
                     q.push(to);
                 }
             }
-            for (int i = 1; i < in.n - 1; i++) {
-                if (i == blocked) continue;
-                if (used[i] == timer) {
-                    reachability[blocked][i] = 1;
-                }
-            }
-        }
-        for (int blocked = 1; blocked < in.n - 1; blocked++) {
             ++timer;
-            queue<int> q;
             q.push(0);
-            used[0] = timer;
+            used1[0] = timer;
             while (!q.empty()) {
                 int v = q.front();
                 q.pop();
                 for (int to : in.g[v]) {
-                    if (to == blocked || used[to] == timer) continue;
-                    used[to] = timer;
+                    if (to == blocked || used1[to] == timer) continue;
+                    used1[to] = timer;
                     q.push(to);
                 }
             }
             for (int i = 1; i < in.n - 1; i++) {
-                if (used[i] == timer) {
-                    if (reachability[blocked][i]) {
-                        reachability_table[blocked][i] = 1;
-                    }
+                if (i == blocked) continue;
+                if (used[i] == timer - 1 && used1[i] == timer) {
+                    reachability_table[blocked].set(i, 1);
                 }
+            }
+            if (used1[in.n - 1] == timer) {
+                reachability_table[blocked].set(0, 1);
+                reachability_table[blocked].set(in.n - 1, 1);
             }
         }
         // for (int i = 0; i < in.n; i++) {
         //     for (int j = 0; j < in.n; j++) {
-        //         cout << reachability[i][j];
+        //         cerr << reachability_table[i][j];
         //     }
-        //     cout << endl;
+        //     cerr << endl;
         // }
     }
 };
 
-vector<pair<int, int>> get_minmax_path_length(const Input& in, bool reversed = false) {
-    vector<pair<int, int>> ans(in.n);
-    vector<int> used(in.n);
-
-    function<void(int)> dfs;
-    dfs = [&in, &ans, &used, reversed, &dfs](int v) {
-        used[v] = true;
-        const auto& adj = reversed ? in.gr[v] : in.g[v];
-
-        ans[v] = {1e9, 0};
-        for (auto to : adj) {
-            if (!used[to]) {
-                dfs(to);
-            }
-            if (ans[to].first < ans[v].first) {
-                ans[v].first = ans[to].first;
-            }
-            if (ans[to].second > ans[v].second) {
-                ans[v].second = ans[to].second;
-            }
-        }
-        if (ans[v].first > ans[v].second) ans[v] = {0, 0};
-        ans[v].first += in.w[v];
-        ans[v].second += in.w[v];
-    };
-
-    for (int i = 0; i < in.n; i++) {
-        if (!used[i]) {
-            dfs(i);
-        }
-    }
-    return ans;
-}
-
 Input input_generator() {
     Input in;
-    in.n = 500;
-    for (int i = 0; i < in.n; i++) in.w.push_back(rand() % 50);
+    in.n = 100 + rand() % 400;
+    for (int i = 0; i < in.n; i++) in.w.push_back(rand() % 100 + 1);
     in.k = 0;
-    for (int i = rand() % in.n; i < in.n; i += rand() % 50 + 1) {
+    for (int i = rand() % in.n; i < in.n; i += rand() % (10 + rand() % 40) + 1) {
         in.k++;
         in.u.push_back(i);
     }
-    for (int i = in.n - 2; i >= 0; i--) {
+    in.g.resize(in.n);
+    in.gr.resize(in.n);
+    
+    vector<bool> has_income(in.n, false);
+    for (int i = in.n - 2; i > 0; i--) {
         vector<int> all(in.n - i - 1);
         iota(all.begin(), all.end(), i + 1);
         random_shuffle(all.begin(), all.end());
-        for (int j = 0; j < min<int>(all.size(), 50); j++) {
+        for (int j = 0; j < min<int>(all.size(), 5000 / in.n); j++) {
             in.edges.push_back({i, all[j]});
+            in.g[i].push_back(all[j]);
+            in.gr[all[j]].push_back(i);
+            has_income[all[j]] = true;
         }
+    }
+    for (int i = 1; i < in.n; i++) {
+        if (!has_income[i]) {
+            in.edges.push_back({0, i});
+            in.g[0].push_back(i);
+            in.gr[i].push_back(0);
+        } 
     }
     in.m = in.edges.size();
     return in;

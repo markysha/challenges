@@ -11,6 +11,7 @@ int main(int argc, char* argv[]) {
 
     int t;
     input >> t;
+    
     int score_sum = 0;
     while (t--) {
         Input in;
@@ -18,8 +19,8 @@ int main(int argc, char* argv[]) {
         utils::Checker checker(in);
         Output out;
         output >> out;
-        int score = checker.score(out);
-        cout << "Test case score " << score << endl;
+        int score = checker.score(out, true);
+        // cout << "Test case score " << score << endl;
         score_sum += score;
     }
     cout << "SCORE = " << score_sum << endl;
