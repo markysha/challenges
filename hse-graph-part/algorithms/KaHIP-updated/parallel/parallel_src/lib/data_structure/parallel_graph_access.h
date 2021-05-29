@@ -197,6 +197,8 @@ public:
 
                                              m_gnc = new ghost_node_communication(m_communicator);
                                              m_gnc->setGraphReference(this);
+
+                                             m_global_to_local_id.max_load_factor(0.25);
                                      };
 
         parallel_graph_access( MPI_Comm communicator );
