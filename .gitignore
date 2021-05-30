@@ -31,4 +31,5 @@
 *.out
 *.app
 
+**/outputs/**
 **/.vscode/**
