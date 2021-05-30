@@ -1,6 +1,9 @@
 # challenges
 Solutions of some challenge contests
 
+* Balanced Regions challenge (top 19)
+  * [repo](https://github.com/markysha/challenges/tree/main/huawei-balanced-regions)
+  * [official page](https://codeforces.com/blog/entry/90185)
 * Cloud sheduling challenge (top 5)
   * [repo](https://github.com/markysha/challenges/tree/main/huawei-fixing-the-cloud)
   * [official page](https://codeforces.com/blog/entry/85241)
