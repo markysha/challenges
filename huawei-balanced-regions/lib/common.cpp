@@ -1,36 +1,36 @@
 #include <bits/stdc++.h>
 using namespace std;
-
+ 
 using Int = long long;
 using Double = double;
 using Region = vector<int>;
-
+ 
 namespace utils {};  // namespace utils
-
+ 
 struct Bitset {
     vector<uint64_t> data;
-
+ 
     Bitset(int n) {
         data.resize((n + 63) / 64);
     }
-
+ 
     Bitset(const Bitset& a) {
         data = a.data;
     }
-
+ 
     Bitset() {}
-
+ 
     int operator[](int pos) {
         return (data[pos / 64] >> (pos & 63)) & 1;
     }
-
+ 
     inline void set(int pos, int val) {
         int cur = (data[pos / 64] >> (pos & 63)) & 1;
         if (val != cur) {
             data[pos / 64] ^= 1ull << (pos & 63);
         }
     }
-
+ 
     int count() const {
         int ans = 0;
         for (auto it : data) {
@@ -38,14 +38,14 @@ struct Bitset {
         }
         return ans;
     }
-
+ 
     void operator&=(const Bitset& b) {
         for (int i = 0; i < b.data.size(); i++) {
             data[i] &= b.data[i];
         }
     }
 };
-
+ 
 int bitset_and_count(const Bitset& a, const Bitset& b) {
     int ans = 0;
     for (int i = 0; i < a.data.size(); i++) {
@@ -53,12 +53,12 @@ int bitset_and_count(const Bitset& a, const Bitset& b) {
     }
     return ans;
 }
-
+ 
 struct Edge {
     int u;
     int v;
 };
-
+ 
 struct Input {
     int n;
     vector<int> w;
@@ -68,7 +68,7 @@ struct Input {
     vector<Edge> edges;
     vector<vector<int>> g;
     vector<vector<int>> gr;
-
+ 
     void init_test() {
         g.clear();
         edges.clear();
@@ -76,7 +76,7 @@ struct Input {
         u.clear();
         w.clear();
     }
-
+ 
     friend ostream& operator<<(ostream& stream, const Input& in) {
         stream << in.n;
         for (int x : in.w) stream << ' ' << x;
@@ -90,7 +90,7 @@ struct Input {
         }
         return stream;
     }
-
+ 
     friend istream& operator>>(istream& stream, Input& in) {
         stream >> in.n;
         in.w.resize(in.n);
@@ -114,9 +114,13 @@ struct Input {
             in.g[in.edges[i].u].push_back(in.edges[i].v);
             in.gr[in.edges[i].v].push_back(in.edges[i].u);
         }
+        for (int i = 0; i < in.n; i++) {
+            sort(in.g[i].begin(), in.g[i].end());
+            sort(in.gr[i].begin(), in.gr[i].end());
+        }
         return stream;
     }
-
+ 
     void build_topsort(int v, const vector<vector<int>>& g, vector<int>& used, vector<int>& ans) const {
         used[v] = 1;
         for (int to : g[v]) {
@@ -126,7 +130,7 @@ struct Input {
         }
         ans.push_back(v);
     }
-
+ 
     vector<int> get_topsort(bool reversed) const {
         vector<int> ans;
         vector<int> used(n, 0);
@@ -134,16 +138,16 @@ struct Input {
         return ans;
     }
 };
-
+ 
 struct Output {
     vector<int> v;
     vector<Region> regions;
-
+ 
     Output() = default;
-
+ 
     void init_test() {
     }
-
+ 
     friend ostream& operator<<(ostream& stream, const Output& out) {
         stream << out.v.size();
         for (int x : out.v) stream << ' ' << x + 1;
@@ -181,58 +185,116 @@ struct Output {
         return stream;
     }
 };
-
+ 
 namespace utils {
 const int N = 5000;
-
+ 
 struct Checker {
     Input in;
     vector<Bitset> reachability_table;
     vector<int> topsort;
-
+    vector<int> topsort_pos;
+ 
     Checker() {}
     Checker(const Input& in) : in(in) {
         used.resize(in.n);
         build_reachability_table();
         topsort = in.get_topsort(false);
+        topsort_pos.resize(in.n);
+        for (int i = 0; i < in.n; i++) {
+            topsort_pos[topsort[i]] = i;
+        }
     }
     bool is_correct_region(const vector<int>& marked, const vector<int>& region) {
         Bitset region_bitset(in.n);
         for (auto v : region) region_bitset.set(v, 1);
         int cnt = 0;
-        for (auto blocked : region) {
-            if (marked[blocked]) {
-                ++cnt;
-                // cerr << blocked << ' ' << bitset_and_count(reachability_table[blocked], region_bitset) << endl;
-                if (bitset_and_count(reachability_table[blocked], region_bitset)) {
-                    // cerr << "[Error] There is path that contains not all marked verticies from some region";
-                    return false;
+        if (region.size() < in.n / 64) {
+            for (auto blocked : region) {
+                if (marked[blocked]) {
+                    ++cnt;
+                    for (int v : region) {
+                        if (reachability_table[blocked][v]) return false;
+                    }
+                }
+            }
+        } else {
+            for (auto blocked : region) {
+                if (marked[blocked]) {
+                    ++cnt;
+                    // cerr << blocked << ' ' << bitset_and_count(reachability_table[blocked], region_bitset) << endl;
+                    if (bitset_and_count(reachability_table[blocked], region_bitset)) {
+                        // cerr << "[Error] There is path that contains not all marked verticies from some region";
+                        return false;
+                    }
                 }
             }
         }
         if (cnt == 0) return false;
         return true;
     }
-    bool is_correct_region_union(const vector<int>& marked, const vector<int>& region1, const vector<int>& region2) {
-        Bitset region_bitset(in.n);
-        for (auto v : region1) region_bitset.set(v, 1);
-        for (auto v : region2) region_bitset.set(v, 1);
-        int cnt = 0;
-        for (auto blocked : region1) {
-            if (marked[blocked]) {
-                ++cnt;
-                if (bitset_and_count(reachability_table[blocked], region_bitset)) {
-                    // cerr << "[Error] There is path that contains not all marked verticies from some region";
-                    return false;
-                }
+    bool is_correct_region_node_union(const vector<int>& marked, const vector<int>& region, const int node) {
+        // region should be correct
+ 
+        if (marked[node]) {
+            for (int v : region) {
+                if (reachability_table[node][v]) return false;
             }
         }
-        for (auto v : region2) {
-            if (marked[v]) {
-                ++cnt;
-                if (bitset_and_count(reachability_table[v], region_bitset)) {
-                    // cerr << "[Error] There is path that contains not all marked verticies from some region";
-                    return false;
+        for (int v : region) {
+            if (marked[v])
+                if (reachability_table[v][node]) return false;
+        }
+        return true;
+    }
+    bool is_correct_region_union(const vector<int>& marked, const vector<int>& region1, const vector<int>& region2) {
+        
+        int cnt = 0;
+ 
+        if (region1.size() + region2.size() < 2 * in.n / 64) {
+            for (auto blocked : region1) {
+                if (marked[blocked]) {
+                    ++cnt;
+                    for (int v : region1) {
+                        if (reachability_table[blocked][v]) return false;
+                    }
+                    for (int v : region2) {
+                        if (reachability_table[blocked][v]) return false;
+                    }
+                }
+            }
+            for (auto blocked : region2) {
+                if (marked[blocked]) {
+                    ++cnt;
+                    for (int v : region1) {
+                        if (reachability_table[blocked][v]) return false;
+                    }
+                    for (int v : region2) {
+                        if (reachability_table[blocked][v]) return false;
+                    }
+                }
+            }
+        } else {
+            Bitset region_bitset(in.n);
+            for (auto v : region1) region_bitset.set(v, 1);
+            for (auto v : region2) region_bitset.set(v, 1);
+            
+            for (auto blocked : region1) {
+                if (marked[blocked]) {
+                    ++cnt;
+                    if (bitset_and_count(reachability_table[blocked], region_bitset)) {
+                        // cerr << "[Error] There is path that contains not all marked verticies from some region";
+                        return false;
+                    }
+                }
+            }
+            for (auto v : region2) {
+                if (marked[v]) {
+                    ++cnt;
+                    if (bitset_and_count(reachability_table[v], region_bitset)) {
+                        // cerr << "[Error] There is path that contains not all marked verticies from some region";
+                        return false;
+                    }
                 }
             }
         }
@@ -242,7 +304,7 @@ struct Checker {
     bool is_correct(const Output& out) {
         bitset<N> marked;
         for (int v : in.u) marked[v] = 1;
-
+ 
         for (int v : out.v) {
             if (marked[v]) {
                 cerr << "[Error] Already marked vertex " << v + 1 << endl;
@@ -250,7 +312,7 @@ struct Checker {
             }
             marked[v] = 1;
         }
-
+ 
         {
             set<int> all;
             Bitset region_bitset(in.n);
@@ -288,7 +350,7 @@ struct Checker {
                 }
             }
         }
-
+ 
         for (const auto& region : out.regions) {
             pair<int, int> cur = get_region_beta_pair(region);
             // cerr << cur.first << ' ' << cur.second << endl;
@@ -302,7 +364,7 @@ struct Checker {
         if (!is_correct(out)) {
             return 0;
         }
-
+ 
         double min_beta = 1.0;
         for (const auto& region : out.regions) {
             pair<int, int> cur = get_region_beta_pair(region);
@@ -320,21 +382,34 @@ struct Checker {
             min_beta = min(min_beta, 1.0 * cur.first / cur.second);
         }
         if (verbose) cerr << "[Info] Min beta = " << fixed << setprecision(8) << min_beta << endl;
-
+ 
         return out.regions.size();
     }
-
+ 
     void update(pair<int, int> &a, int b) {
         if ((b == a.first) || (b == a.second)) return;
         if (b < a.second) a.second = b;
         if (a.second < a.first) swap(a.first, a.second);
     }
-
+ 
     pair<int, int> get_region_beta_pair(const vector<int>& region) {
-        vector<int> cur_w(in.n, 0);
+        static vector<int> cur_w;
+        cur_w.resize(in.n);
         for (int v : region) cur_w[v] = in.w[v];
+        int l = topsort_pos[region[0]], r = topsort_pos[region[0]];
+        for (auto it : region) {
+            int cur = topsort_pos[it];
+            if (cur < l) {
+                l = cur;
+                continue;
+            } 
+            if (cur > r) {
+                r = cur;
+            }
+        }
         vector<pair<pair<int, int>, int>> dp(in.n);
-        for (int v : topsort) {
+        for (int i = l; i < topsort.size(); i++) {
+            int v = topsort[i];
             dp[v] = {{1e9, 1e9}, 0};
             for (int to : in.g[v]) {
                 update(dp[v].first, dp[to].first.first);
@@ -342,28 +417,35 @@ struct Checker {
                 update(dp[v].first, dp[to].second);
                 dp[v].second = max(dp[v].second, dp[to].second);
             }
-            if (in.g[v].size() == 0) dp[v] = {{0, 0}, 0};
+            if (in.g[v].size() == 0) dp[v] = {{0, 1e9}, 0};
             dp[v].first.first += cur_w[v];
             dp[v].first.second += cur_w[v];
             dp[v].second += cur_w[v];
+            // if (1ll * (dp[v].first.first == 0 ? dp[v].first.second : dp[v].first.first) * 10 < 1ll * dp[v].second * 9) {
+            //     return {8, 10};
+            // }
         }
+        for (int v : region) cur_w[v] = 0;
         if (dp[0].first.first == 0) {
             return {dp[0].first.second, dp[0].second};
         }
         return {dp[0].first.first, dp[0].second};
     }
-
+ 
     bool is_correct_region_beta(const vector<int>& region) {
         auto cur = get_region_beta_pair(region);
         return 1ll * cur.first * 10 >= 1ll * 9 * cur.second;
     }
+ 
+    vector<pair<pair<int, int>, int>> dp;
+    vector<int> cur_w;
 
     pair<int, int> get_region_union_beta_pair(const vector<int>& region1, const vector<int>& region2) {
-        vector<int> cur_w(in.n, 0);
+        cur_w.assign(in.n, 0);
         for (int v : region1) cur_w[v] = in.w[v];
         for (int v : region2) cur_w[v] = in.w[v];
-        vector<pair<pair<int, int>, int>> dp(in.n);
-        for (int v : topsort) {
+        dp.resize(in.n);
+        for (int v: topsort) {
             dp[v] = {{1e9, 1e9}, 0};
             for (int to : in.g[v]) {
                 update(dp[v].first, dp[to].first.first);
@@ -371,7 +453,7 @@ struct Checker {
                 update(dp[v].first, dp[to].second);
                 dp[v].second = max(dp[v].second, dp[to].second);
             }
-            if (in.g[v].size() == 0) dp[v] = {{0, 0}, 0};
+            if (in.g[v].size() == 0) dp[v] = {{0, 1e9}, 0};
             dp[v].first.first += cur_w[v];
             dp[v].first.second += cur_w[v];
             dp[v].second += cur_w[v];
@@ -381,16 +463,16 @@ struct Checker {
         }
         return {dp[0].first.first, dp[0].second};
     }
-
+ 
 private:
     vector<int> used;
     vector<int> used1;
     int timer = 0;
-
+ 
     void build_reachability_table() {
         reachability_table.clear();
         reachability_table.resize(in.n, Bitset(in.n));
-
+ 
         used1 = used;
         // for (int i = 1; i < in.n - 1; i++) reachability_table[i][0] = 1;
         // for (int i = 1; i < in.n - 1; i++) reachability_table[i][in.n - 1] = 1;
@@ -408,7 +490,6 @@ private:
                     q.push(to);
                 }
             }
-            ++timer;
             q.push(0);
             used1[0] = timer;
             while (!q.empty()) {
@@ -422,7 +503,7 @@ private:
             }
             for (int i = 1; i < in.n - 1; i++) {
                 if (i == blocked) continue;
-                if (used[i] == timer - 1 && used1[i] == timer) {
+                if (used[i] == timer && used1[i] == timer) {
                     reachability_table[blocked].set(i, 1);
                 }
             }
@@ -439,7 +520,7 @@ private:
         // }
     }
 };
-
+ 
 Input input_generator() {
     Input in;
     in.n = 100 + rand() % 400;
