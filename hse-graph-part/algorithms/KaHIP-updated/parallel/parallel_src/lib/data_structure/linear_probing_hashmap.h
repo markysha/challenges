@@ -101,7 +101,7 @@ private:
         NodeID m_last_pos;
         NodeID m_last_request;
         std::vector< KeyValuePair > m_internal_map;
-        std::stack< NodeID > m_contained_key_positions;
+        std::stack< NodeID, std::vector< NodeID > > m_contained_key_positions;
 };
 
 
