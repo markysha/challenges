@@ -1,0 +1,20 @@
+running collective dummy operations took 0.000878811
+Reading binary graph ...
+version: 3 n: 952507 m: 6138516
+peID 0 from 0 to 160932 amount 160933
+peID 1 from 160933 to 312787 amount 151855
+peID 2 from 312788 to 461175 amount 148388
+peID 3 from 461176 to 615031 amount 153856
+peID 4 from 615032 to 770125 amount 155094
+peID 5 from 770126 to 952506 amount 182381
+took 0.189903
+n:952507 m: 6138516
+log> ghost edges 0.552287
+log> local edges 0.447713
+upper bound on blocks 245270
+log>=====================================
+log>============AND WE R DONE============
+log>=====================================
+log>total partitioning time elapsed 22.9031
+log>final edge cut 388147
+log>final balance 1.02995
