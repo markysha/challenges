@@ -1,0 +1,3 @@
+/Users/m.korneychik/Documents/Home/challenges/huawei-communication-routing/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/Users/m.korneychik/Documents/Home/challenges/huawei-communication-routing/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/m.korneychik/Documents/Home/challenges/huawei-communication-routing/cmake-build-debug/CMakeFiles/compute.dir

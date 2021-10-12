@@ -1,0 +1,1 @@
+/usr/bin/clang++ -g -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX11.1.sdk -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/huawei_communication_routing.dir/lib/common.cpp.o CMakeFiles/huawei_communication_routing.dir/lib/score.cpp.o CMakeFiles/huawei_communication_routing.dir/markysha/main.cpp.o -o huawei_communication_routing 
