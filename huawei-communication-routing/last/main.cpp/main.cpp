@@ -451,9 +451,9 @@ void solve(Input in) {
             }
         }
     }
-    while(1.0 * clock() / CLOCKS_PER_SEC < 1.8) {
+    while(1.0 * clock() / CLOCKS_PER_SEC < 1.85) {
         shuffle(out.paths.begin(), out.paths.end(), rnd);
-        int cnt = 5;
+        int cnt = 2;
         for (size_t i = out.paths.size() - 1; i >= out.paths.size() - cnt; --i) {
             add_state(state.flow_by_id[out.paths[i].first], out.paths[i].second, in, -1);
 //            found.erase(out.paths[i].first);
