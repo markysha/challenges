@@ -94,37 +94,37 @@
 
 #include <string_view>
 
-constexpr int SFL = 200;
-constexpr int GFL = 100;
+constexpr unsigned char SFL = 200;
+constexpr unsigned char GFL = 100;
 
 using namespace std;
 
 namespace utils {};  // namespace utils
 
 struct Edge {
-    int id;
-    int group_id;
-    int v;
-    int u;
+    short id;
+    short group_id;
+    short v;
+    short u;
     int distance;
     int capacity;
 };
 
 struct Constrain {
-    int node_id;
-    pair<int, int> edge_ids;
+    short node_id;
+    pair<short, short> edge_ids;
 };
 
 struct Flow {
-    int id;
-    int source;
-    int target;
+    short id;
+    short source;
+    short target;
     int flow;
 };
 
 struct Input {
-    int n;
-    int m;
+    short n;
+    short m;
     vector<Edge> edges;
     vector<Flow> flows;
     vector<Constrain> constrains;
@@ -201,54 +201,53 @@ namespace utils {
     };
 
 }  // namespace utils
+
 using namespace std;
 
-//const bool DEBUG = false;
-const int MAX_EDGE_ID = 1<<14;
-const int MAX_GROUP_ID = 4501;
 
-mt19937 rnd(0);
+//const bool DEBUG = false;
+const short MAX_EDGE_ID = 1 << 14;
+const short MAX_GROUP_ID = 4501;
+
+mt19937 rnd(3);
 
 struct PairHasher {
-    size_t operator()(const pair<int, int> &x) const {
-        return x.first * MAX_EDGE_ID + x.second;
+    size_t operator()(int x, short y) const {
+        return (x << 14) + y;
     }
 } blocked_hacher;
 
 struct OrderedEdge {
-    int id;
-    int v;
-    int group_id;
+    short id;
+    short v;
+    short group_id;
 };
 
 struct State {
     vector<Flow> flow_by_id;
     vector<OrderedEdge> ordered_edges;
-    vector<pair<int, int>> ordered_edges_ids;
-    vector<pair<int, int>> input_in_ordered_edges;
+    vector<pair<short, short>> ordered_edges_ids;
+    vector<pair<short, short>> input_in_ordered_edges;
     vector<int> edge_capacity;
-    vector<int> node_flow_size;
-    vector<int> group_id_flow_size;
-
-//    vector<pair<int, int>> ordered_constrains;
-//    vector<pair<int, int>> ordered_constrains_ids;
-//    vector<int> constrains_used;
-//    int constains_timer = 0;
-
-    bitset<MAX_EDGE_ID*MAX_EDGE_ID> blocked;
-//    unordered_set<pair<int, int>, PairHasher> constrains;
+    vector<unsigned char> node_flow_size;
+    vector<unsigned char> group_id_flow_size;
+    vector<bool> is_node_blocked;
+    bitset<MAX_EDGE_ID * MAX_EDGE_ID> blocked;
 } state;
 
-void init_state(const Input &in) {
+Input in;
+
+void init_state() {
     state.flow_by_id = in.flows;
 
+    state.ordered_edges.clear();
     state.ordered_edges.reserve(in.m * 2);
     for (int i = 0; i < in.m; i++) {
         const auto &e = in.edges[i];
         state.ordered_edges.push_back({e.id, e.v, e.group_id});
         state.ordered_edges.push_back({e.id, e.u, e.group_id});
     }
-    sort(state.ordered_edges.begin(), state.ordered_edges.end(), [&in](const OrderedEdge &a, const OrderedEdge &b) {
+    sort(state.ordered_edges.begin(), state.ordered_edges.end(), [](const OrderedEdge &a, const OrderedEdge &b) {
         const auto &ae = in.edges[a.id];
         const auto &be = in.edges[b.id];
         int au = a.v == ae.u ? ae.v : ae.u;
@@ -260,7 +259,7 @@ void init_state(const Input &in) {
     state.ordered_edges_ids.resize(in.n);
     state.input_in_ordered_edges.resize(in.m);
     for (int i = 0; i < in.m * 2; i++) {
-        const auto& e = in.edges[state.ordered_edges[i].id];
+        const auto &e = in.edges[state.ordered_edges[i].id];
         if (e.v == state.ordered_edges[i].v) {
             state.input_in_ordered_edges[e.id].first = i;
         } else {
@@ -289,6 +288,8 @@ void init_state(const Input &in) {
 
     state.group_id_flow_size.resize(MAX_GROUP_ID);
 
+    state.is_node_blocked.resize(in.n);
+
 //    state.ordered_constrains.reserve(in.constrains.size() * 2);
 //    for (size_t i = 0; i < in.constrains.size(); i++) {
 //        const auto &c = in.constrains[i];
@@ -312,51 +313,60 @@ void init_state(const Input &in) {
 //    state.constrains.max_load_factor(0.25);
 //    state.constrains.reserve(in.constrains.size() * 3);
     for (const auto &constrain: in.constrains) {
-        state.blocked[blocked_hacher(constrain.edge_ids)] = 1;
-        state.blocked[blocked_hacher({constrain.edge_ids.second, constrain.edge_ids.first})] = 1;
+        state.blocked[blocked_hacher(constrain.edge_ids.first, constrain.edge_ids.second)] = 1;
+        state.blocked[blocked_hacher(constrain.edge_ids.second, constrain.edge_ids.first)] = 1;
     }
 }
 
-optional<vector<int>>
-find_path(const Flow &flow, const Input &in, int limit = 1e9, int node_flow_limit = SFL, int group_flow_limit = GFL) {
-    if (state.node_flow_size[flow.source] >= SFL) {
+inline optional<vector<int>>
+find_path(const Flow &flow, short limit = 30000, unsigned char node_flow_limit = SFL, unsigned char group_flow_limit = GFL) {
+    if (state.node_flow_size[flow.source] >= node_flow_limit) {
         return nullopt;
     }
-    static vector<int> d;
-    d.assign(in.n, 1e9);
-//    vector<int> dc(in.n, 1e9);
-    static vector<int> pr;
-    pr.assign(in.n, MAX_EDGE_ID);
-    d[flow.source] = 0;
-    vector<int> q;
+    static int used_timer = 0;
+    used_timer++;
+    static vector<int> used(in.n);
+//    static vector<short> d(in.n);
+    static vector<short> pr(in.n);
+
+//    d[flow.source] = 0;
+    pr[flow.source] = 0;
+    used[flow.source] = used_timer;
+    vector<short> q;
     size_t q_start = 0;
     q.push_back(flow.source);
-    while (q_start < q.size()) {
-        int v = q[q_start++];
-        if (v == flow.target) break;
-        if (d[v] > limit) break;
 
-        int e_id = pr[v] == MAX_EDGE_ID ? 0 : state.ordered_edges[pr[v]].id;
-//        state.constains_timer++;
-//        for (int i = state.ordered_constrains_ids[e_id].first; i < state.ordered_constrains_ids[e_id].second; ++i) {
-//            const auto& e = state.ordered_constrains[i];
-//            state.constrains_used[e.second] = state.constains_timer;
-//        }
+    int d = 0;
+    size_t next_d = 1;
+    while (q_start < q.size()) {
+        if (q_start == next_d) {
+            ++d;
+            next_d = q.size();
+        }
+        short v = q[q_start++];
+        if (v == flow.target) break;
+        if (d > limit) break;
+
+        int e_id = state.ordered_edges[pr[v]].id;
+
         for (int i = state.ordered_edges_ids[v].first; i < state.ordered_edges_ids[v].second; i++) {
             const auto &e = state.ordered_edges[i];
-            if (state.node_flow_size[e.v] >= node_flow_limit) continue;
-            if (state.group_id_flow_size[e.group_id] >= group_flow_limit) continue;
-            if (state.edge_capacity[e.id] < flow.flow) continue;
-            if (state.blocked[blocked_hacher({e_id, e.id})]) continue;
-            if (d[e.v] > d[v] + 1) {
-                d[e.v] = d[v] + 1;
-                q.push_back(e.v);
-                pr[e.v] = i;
-            }
+            if (state.node_flow_size[e.v] >= node_flow_limit ||
+                state.group_id_flow_size[e.group_id] >= group_flow_limit ||
+                state.edge_capacity[e.id] < flow.flow ||
+                state.blocked[blocked_hacher(e_id, e.id)] ||
+                (state.is_node_blocked[e.v] && e.v != flow.target) ||
+                used[e.v] == used_timer)
+                continue;
+
+            used[e.v] = used_timer;
+//            d[e.v] = d[v] + 1;
+            q.push_back(e.v);
+            pr[e.v] = i;
         }
     }
-    if (d[flow.target] > in.n) return nullopt;
-    std::cerr << "Found path for " << flow.id << std::endl;
+    if (used[flow.target] != used_timer) return nullopt;
+//    std::cerr << "Found path for " << flow.id << std::endl;
     vector<int> ans;
     int v = flow.target;
     while (true) {
@@ -370,131 +380,168 @@ find_path(const Flow &flow, const Input &in, int limit = 1e9, int node_flow_limi
     return ans;
 }
 
-void update_state(const Flow &flow, const vector<int> &path, const Input &in) {
-    ++state.node_flow_size[flow.source];
-    ++state.node_flow_size[flow.target];
-    for (int id: path) {
-        int e_id = state.ordered_edges[id].id;
-//        const auto& e = in.edges[e_id];
-        state.edge_capacity[e_id] -= flow.flow;
-
-//        auto ids = state.input_in_ordered_edges[e_id];
-//        {
-//            auto v = e.u;
-//            int l = state.ordered_edges_ids[v].first;
-//            int p = ids.first;
-//            while (p > l && state.edge_capacity[state.ordered_edges[p].id] < state.edge_capacity[state.ordered_edges[p - 1].id]) {
-//                swap(state.ordered_edges[p], state.ordered_edges[p - 1]);
-//                --p;
+//optional<vector<int>>
+//find_path2(const Flow &flow, int limit = 1e9, int node_flow_limit = SFL, int group_flow_limit = GFL) {
+//    if (state.node_flow_size[flow.source] >= node_flow_limit || state.node_flow_size[flow.target] >= node_flow_limit) {
+//        return nullopt;
+//    }
+//
+//    static vector<pair<int, int>> d;
+//    static vector<int> pr;
+//    d.assign(in.n, {1e9, 0});
+//    pr.assign(in.n, MAX_EDGE_ID);
+//
+//    d[flow.source] = {0, 0};
+//    d[flow.target] = {0, 1};
+//    vector<pair<int, int>> q;
+//    size_t q_start = 0;
+//    q.push_back({flow.source, 0});
+//    q.push_back({flow.target, 1});
+//    bool f = false;
+//    tuple<int, int, int> mid;
+//    while (q_start < q.size()) {
+//        pair<int, int> vv = q[q_start++];
+//        int v = vv.first;
+//        int c = vv.second;
+//
+//        if (d[v].first > limit) break;
+//
+//        int e_id = pr[v] == MAX_EDGE_ID ? 0 : state.ordered_edges[pr[v]].id;
+//        for (int i = state.ordered_edges_ids[v].first; i < state.ordered_edges_ids[v].second; i++) {
+//            const auto &e = state.ordered_edges[i];
+//            if (state.node_flow_size[e.v] >= node_flow_limit) continue;
+//            if (state.group_id_flow_size[e.group_id] >= group_flow_limit) continue;
+//            if (state.edge_capacity[e.id] < flow.flow) continue;
+//            if (state.blocked[blocked_hacher({e_id, e.id})]) continue;
+//            if (d[e.v].first != 1e9 && d[e.v].second != c &&
+//                !state.blocked[blocked_hacher({e_id, state.ordered_edges[pr[e.v]].id})]) {
+//                mid = {v, i, e.v};
+//                f = true;
+//                break;
 //            }
+//            if (d[e.v].first != 1e9) continue;
+//            d[e.v] = {d[v].first + 1, c};
+//            q.push_back({e.v, c});
+//            pr[e.v] = i;
 //        }
+//        if (f) break;
+//    }
+//    if (!f) return nullopt;
+////    std::cerr << "Found path for " << flow.id << std::endl;
+//    vector<int> ans0, ans1;
+//    {
+//        int v = get<0>(mid);
+//        while (true) {
+//            if (v == flow.source || v == flow.target) break;
+//            ans0.push_back(pr[v]);
+//            int e_id = state.ordered_edges[pr[v]].id;
+//            int to = in.edges[e_id].v == v ? in.edges[e_id].u : in.edges[e_id].v;
+//            v = to;
+//        }
+//    }
+//    {
+//        int v = get<2>(mid);
+//        while (true) {
+//            if (v == flow.source || v == flow.target) break;
+//            ans1.push_back(pr[v]);
+//            int e_id = state.ordered_edges[pr[v]].id;
+//            int to = in.edges[e_id].v == v ? in.edges[e_id].u : in.edges[e_id].v;
+//            v = to;
+//        }
+//        int mid_e_id = get<1>(mid);
+//        if (v == flow.target) {
+//            // source -> v -> mid_e_id -> e.v -> target
+//            for (auto &id: ans1) {
+//                int e_id = state.ordered_edges[id].id;
+//                const auto &p = state.input_in_ordered_edges[e_id];
+//                int id_ = p.first == id ? p.second : p.first;
+//                id = id_;
+//            }
+//            reverse(ans0.begin(), ans0.end());
+//            ans0.push_back(mid_e_id);
+//            copy(ans1.begin(), ans1.end(), back_inserter(ans0));
+//            return ans0;
+//        } else {
+//            // target -> v -> mid_e_id -> e.v -> source
+//            reverse(ans1.begin(), ans1.end());
+//            reverse(ans0.begin(), ans0.end());
+//            ans0.push_back(mid_e_id);
+//            for (auto &id: ans0) {
+//                int e_id = state.ordered_edges[id].id;
+//                const auto &p = state.input_in_ordered_edges[e_id];
+//                int id_ = p.first == id ? p.second : p.first;
+//                id = id_;
+//            }
+//            copy(ans0.rbegin(), ans0.rend(), back_inserter(ans1));
+//            return ans1;
+//        }
+//    }
+//}
 
-        ++state.group_id_flow_size[in.edges[e_id].group_id];
-    }
-    for (size_t i = 0; i < path.size() - 1; i++) {
-        ++state.node_flow_size[state.ordered_edges[path[i]].v];
-    }
-}
-
-void add_state(const Flow &flow, const vector<int> &path, const Input &in, int add) {
+void add_state(const Flow &flow, const vector<int> &path, int add) {
     state.node_flow_size[flow.source] += add;
-    state.node_flow_size[flow.target] += add;
     for (int id: path) {
         int e_id = state.ordered_edges[id].id;
-//        const auto& e = in.edges[e_id];
-        state.edge_capacity[e_id] -= flow.flow * add;
-
-//        auto ids = state.input_in_ordered_edges[e_id];
-//        {
-//            auto v = e.u;
-//            int l = state.ordered_edges_ids[v].first;
-//            int p = ids.first;
-//            while (p > l && state.edge_capacity[state.ordered_edges[p].id] < state.edge_capacity[state.ordered_edges[p - 1].id]) {
-//                swap(state.ordered_edges[p], state.ordered_edges[p - 1]);
-//                --p;
-//            }
-//        }
-
+        state.edge_capacity[e_id] -= add > 0 ? flow.flow : -flow.flow;
         state.group_id_flow_size[in.edges[e_id].group_id] += add;
-    }
-    for (size_t i = 0; i < path.size() - 1; i++) {
-        state.node_flow_size[state.ordered_edges[path[i]].v] += add;
+        state.node_flow_size[state.ordered_edges[id].v] += add;
     }
 }
 
-void solve(Input in) {
+void solve() {
     Output out;
 
-    init_state(in);
-    std::cerr << "State inited" << std::endl;
+    init_state();
 
     sort(in.flows.begin(), in.flows.end(), [](const Flow &a, const Flow &b) {
         return a.flow < b.flow;
     });
 
-    set<int> found;
-    for (int j = 5; j < 9; j++) {
+    bitset<15000> found;
+    for (int j = 6; j < 9; j++) {
         for (int i = 0; i < 6; i++) {
             for (const auto &flow : in.flows) {
-                if (found.count(flow.id)) continue;
-                auto path_opt = find_path(flow, in, 1 << i, min(SFL, 1 << j), min(GFL, 1 << j));
+                if (found[flow.id]) continue;
+                auto path_opt = find_path(flow, 1 << i, min<int>(SFL, 1 << j), min<int>(GFL, 1 << j));
                 if (path_opt) {
-//                    vector<int> path{};
-//                    for (auto x: path_opt.value()) {
-//                        path.push_back(state.ordered_edges[x].id);
-//                    }
-
-                    found.insert(flow.id);
-                    update_state(flow, path_opt.value(), in);
+                    found[flow.id] = 1;
+                    add_state(flow, path_opt.value(), 1);
                     out.paths.emplace_back(flow.id, std::move(path_opt.value()));
                 }
             }
         }
     }
-    while(1.0 * clock() / CLOCKS_PER_SEC < 1.85) {
+    while (1.0 * clock() / CLOCKS_PER_SEC < 1.95) {
         shuffle(out.paths.begin(), out.paths.end(), rnd);
-        int cnt = 2;
-        for (size_t i = out.paths.size() - 1; i >= out.paths.size() - cnt; --i) {
-            add_state(state.flow_by_id[out.paths[i].first], out.paths[i].second, in, -1);
-//            found.erase(out.paths[i].first);
-        }
-        Output cur;
-        for (const auto &flow : in.flows) {
-            if (found.count(flow.id)) continue;
-            auto path_opt = find_path(flow, in, 16);
+        for (auto &it: out.paths) {
+            if (1.0 * clock() / CLOCKS_PER_SEC > 1.95) break;
+
+            const auto &flow = state.flow_by_id[it.first];
+            add_state(flow, it.second, -1);
+            for (auto id: it.second) {
+                state.is_node_blocked[state.ordered_edges[id].v] = true;
+            }
+            state.is_node_blocked[flow.target] = false;
+            auto path_opt = find_path(flow, (int)(it.second.size()) * 2, SFL, GFL);
             if (path_opt) {
-                found.insert(flow.id);
-                add_state(flow, path_opt.value(), in, 1);
-                cur.paths.emplace_back(flow.id, std::move(path_opt.value()));
+                add_state(flow, path_opt.value(), 1);
+                it.second = std::move(path_opt.value());
+            } else {
+                add_state(flow, it.second, 1);
             }
-            if (cur.paths.size() > cnt) break;
+            for (auto id: it.second) {
+                state.is_node_blocked[state.ordered_edges[id].v] = false;
+            }
         }
-//        for (size_t i = out.paths.size() - 1; i >= out.paths.size() - cnt; --i) {
-//            auto flow = state.flow_by_id[out.paths[i].first];
-//            if (found.count(flow.id)) continue;
-//            auto path_opt = find_path(flow, in, 16);
-//            if (path_opt) {
-//                found.insert(flow.id);
-//                add_state(flow, path_opt.value(), in, 1);
-//                cur.paths.emplace_back(flow.id, std::move(path_opt.value()));
-//            }
-//        }
-        if (cur.paths.size() >= cnt) {
-            for (int i = 0; i < cnt; i++) {
-                found.erase(out.paths.back().first);
-                out.paths.pop_back();
-            }
-            for (auto& it: cur.paths) {
-                out.paths.push_back(it);
-            }
-        } else {
-            for (const auto& it: cur.paths) {
-                add_state(state.flow_by_id[it.first], it.second, in, -1);
-                found.erase(it.first);
-            }
-            for (size_t i = out.paths.size() - 1; i >= out.paths.size() - cnt; --i) {
-                add_state(state.flow_by_id[out.paths[i].first], out.paths[i].second, in, 1);
-                found.insert(out.paths[i].first);
+        for (const auto &flow : in.flows) {
+            if (1.0 * clock() / CLOCKS_PER_SEC > 1.95) break;
+
+            if (found[flow.id]) continue;
+            auto path_opt = find_path(flow, 50);
+            if (path_opt) {
+                found[flow.id] = 1;
+                add_state(flow, path_opt.value(), 1);
+                out.paths.emplace_back(flow.id, std::move(path_opt.value()));
             }
         }
     }
@@ -505,18 +552,7 @@ void solve(Input in) {
         }
         it.second = std::move(path);
     }
-//    for (auto it : state.ordered_edges) {
-//        std::cerr << it.id << ' ';
-//    }
-//    std::cerr << endl;
-//    for (auto it : state.node_flow_size) {
-//        cerr << it << ' ';
-//    }
-//    cerr << endl;
-//    for (auto it : state.edge_capacity) {
-//        cerr << it << ' ';
-//    }
-//    cerr << endl;
+
     assert(out.paths.size() > 0);
     cout << out;
 }
@@ -526,8 +562,7 @@ int main() {
     cin.tie(0);
     srand(time(0));
 
-    Input in;
     cin >> in;
-    solve(in);
+    solve();
     return 0;
 }

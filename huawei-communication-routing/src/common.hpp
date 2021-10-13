@@ -94,37 +94,37 @@
 
 #include <string_view>
 
-constexpr int SFL = 200;
-constexpr int GFL = 100;
+constexpr unsigned char SFL = 200;
+constexpr unsigned char GFL = 100;
 
 using namespace std;
 
 namespace utils {};  // namespace utils
 
 struct Edge {
-    int id;
-    int group_id;
-    int v;
-    int u;
+    short id;
+    short group_id;
+    short v;
+    short u;
     int distance;
     int capacity;
 };
 
 struct Constrain {
-    int node_id;
-    pair<int, int> edge_ids;
+    short node_id;
+    pair<short, short> edge_ids;
 };
 
 struct Flow {
-    int id;
-    int source;
-    int target;
+    short id;
+    short source;
+    short target;
     int flow;
 };
 
 struct Input {
-    int n;
-    int m;
+    short n;
+    short m;
     vector<Edge> edges;
     vector<Flow> flows;
     vector<Constrain> constrains;
