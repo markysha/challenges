@@ -10,3 +10,6 @@ Solutions of some challenge contests
 * Graph Mining challenge (top 10%)
   * [repo](https://github.com/markysha/challenges/tree/main/huawei-graph-mining)
   * [official page](https://codeforces.com/blog/entry/79078)
+* Communication Routing challenge (top 27)
+  * [repo](https://github.com/markysha/challenges/tree/main/huawei-communication-routing)
+  * [official_page](https://codeforces.com/blog/entry/94906)
